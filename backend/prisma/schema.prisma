@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+	provider = "postgresql"
+	url      = env("DATABASE_URL")
+}
+
+enum ChannelType {
+	PUBLIC
+	PROTECTED
+	PRIVATE
+}
+
+enum ChannelRole {
+	USER
+	ADMIN
+	OWNER
+}
+
+model User {
+  id Int @id @default(autoincrement())
+  email     String	@unique
+  username  String	@unique
+  firstName String?
+  lastName  String?
+  hash      String?
+  profilePic String?
+  twoFactorSecret String?
+  twoFactorEnabled Boolean? @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  status    Int? @default(0) //0 offline, 1 online, 2 in game
+
+  blocked             User[]        @relation("blocked")
+  blockedBy           User[]        @relation("blocked")
+  bannedOf            Channel[]
+  messages            Message[] // Not in ChannelUser for message persistence
+  hashedRefreshToken String?
+
+  channels ChannelUser[]
+
+  gamesWon Game[] @relation("GameWinner")
+  gamesLose Game[] @relation("GameLoser")
+  gamesPlayed Int @default(0)
+  totalPoints Int @default(0)
+
+  friendships       Friendship[] @relation("UserFriends")
+  friendOf          Friendship[] @relation("FriendToUser")
+
+  @@map("Users")
+}
+
+model Friendship {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  friendId  Int
+
+  user      User     @relation("UserFriends", fields: [userId], references: [id])
+  friend    User     @relation("FriendToUser", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
+}
+
+model ChannelUser {
+	id        Int         @id @default(autoincrement())
+	user      User        @relation(fields: [userId], references: [id]) //must be unique
+	userId    Int
+	channel   Channel     @relation(fields: [channelId], references: [id])
+	channelId Int
+	role      ChannelRole
+
+	@@unique([userId, channelId])
+}
+
+model Channel {
+	id        Int           @id @default(autoincrement())
+	createdAt DateTime      @default(now())
+	updatedAt DateTime      @updatedAt
+	name      String        @unique
+	type      ChannelType
+	password  String?
+	users     ChannelUser[]
+	messages  Message[]
+	isDM      Boolean       @default(false) // is Direct Message
+	bans      User[]
+}
+
+model Message {
+	id        Int      @id @default(autoincrement())
+	createdAt DateTime @default(now())
+	channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+	channelId Int
+	author    User     @relation(fields: [authorId], references: [id])
+	authorId  Int
+	content   String
+}
+
+model Game {
+    id          Int      @id @default(autoincrement())
+    createdAt   DateTime @default(now())
+    winner      User   @relation("GameWinner", fields: [winnerId], references: [id])
+    winnerId    Int
+    loser       User    @relation("GameLoser", fields: [loserId], references: [id])
+    loserId     Int
+    winnerScore Int
+    loserScore  Int
+}
